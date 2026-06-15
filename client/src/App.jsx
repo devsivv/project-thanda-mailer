@@ -10,7 +10,7 @@ import CampaignResultsPage from "./pages/CampaignResultsPage";
 import HistoryPage         from "./pages/HistoryPage";
 import QuickSetupPage      from "./pages/QuickSetupPage";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const API_URL = import.meta.env.DEV ? "/api" : (import.meta.env.VITE_API_URL || "");
 
 export default function App() {
   // ============================================================
@@ -206,13 +206,38 @@ export default function App() {
       formData.append("subject", subject);
       formData.append("body", body);
       if (attachment) formData.append("attachment", attachment);
+      
       const response = await fetch(`${API_URL}/send-test-email`, { method: "POST", body: formData });
+      
+      if (!response.ok) {
+        let errorMsg = `Server returned status ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData && errorData.error) {
+            errorMsg = errorData.error;
+          }
+        } catch (jsonErr) {
+          console.warn("Could not parse error JSON:", jsonErr);
+          try {
+            const text = await response.text();
+            if (text) errorMsg = text.substring(0, 100);
+          } catch (textErr) {
+            console.warn("Could not read error text:", textErr);
+          }
+        }
+        showAlert("Test Email Failed", errorMsg);
+        return;
+      }
+      
       const data = await response.json();
-      if (data.success) { setShowTestModal(true); }
-      else { showAlert("Test Email Failed", data.error || "Sending failed"); }
+      if (data.success) {
+        setShowTestModal(true);
+      } else {
+        showAlert("Test Email Failed", data.error || "Sending failed");
+      }
     } catch (error) {
       console.error(error);
-      showAlert("Test Email Failed", "Test sending failed");
+      showAlert("Test Email Failed", `Network or parser error: ${error.message}`);
     } finally {
       setSending(false);
     }

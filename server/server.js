@@ -7,6 +7,11 @@ const csv = require("csv-parser");
 const fs = require("fs");
 const nodemailer = require("nodemailer");
 
+const dns = require("dns");
+
+// Force IPv4 before IPv6
+dns.setDefaultResultOrder("ipv4first");
+
 const app = express();
 
 const BASE_URL = process.env.BASE_URL || "http://localhost:5000";
@@ -18,13 +23,20 @@ const upload = multer({
   }
 });
 
-const allowedOrigins = ["http://localhost:5173", process.env.FRONTEND_URL].filter(Boolean);
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://127.0.0.1:5173",
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
 app.use(
   cors({
     origin: function (origin, callback) {
+      console.log("CORS check for origin:", origin);
       if (!origin || allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
+        console.error("CORS blocked origin:", origin);
         callback(new Error("Not allowed by CORS"));
       }
     }
@@ -190,8 +202,16 @@ app.post("/send-test-email", upload.single("attachment"), async (req, res) => {
     const { gmail, appPassword, subject, body } = req.body;
     
     const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: { user: gmail, pass: appPassword },
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      requireTLS: true,
+      debug: true,
+      logger: true,
+      auth: {
+        user: gmail,
+        pass: appPassword,
+      },
     });
 
     await transporter.verify();
@@ -224,7 +244,9 @@ app.post("/send-test-email", upload.single("attachment"), async (req, res) => {
     }
 
     console.log("MAIL OPTIONS:", mailOptions);
+    console.log("ABOUT TO SEND EMAIL");
     await transporter.sendMail(mailOptions);
+    console.log("EMAIL SENT SUCCESSFULLY");
     res.json({ success: true, message: "Test email sent successfully" });
   } catch (error) {
     console.error("TEST EMAIL ERROR:", error);
@@ -268,7 +290,12 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
       }
 
     const transporter = nodemailer.createTransport({
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      secure: false,
+      requireTLS: true,
+      debug: true,
+      logger: true,
       auth: {
         user: gmail,
         pass: appPassword,
