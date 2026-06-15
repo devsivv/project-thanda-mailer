@@ -302,17 +302,18 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
       }
 
     const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      requireTLS: true,
-      debug: true,
-      logger: true,
-      auth: {
-        user: gmail,
-        pass: appPassword,
-      },
-    });
+  host: "142.251.163.109",
+  port: 587,
+  secure: false,
+  requireTLS: true,
+  tls: {
+    servername: "smtp.gmail.com"
+  },
+  auth: {
+    user: gmail,
+    pass: appPassword,
+  },
+});
 
     await transporter.verify();
 
