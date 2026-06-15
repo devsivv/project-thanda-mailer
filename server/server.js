@@ -208,10 +208,13 @@ app.post("/send-test-email", upload.single("attachment"), async (req, res) => {
 console.log("Creating SMTP transporter...");
 
 const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
+  host: "142.251.163.109",
   port: 587,
   secure: false,
   requireTLS: true,
+  tls: {
+    servername: "smtp.gmail.com"
+  },
   auth: {
     user: gmail,
     pass: appPassword,
