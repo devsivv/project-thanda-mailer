@@ -1,0 +1,28 @@
+node_modules
+dist
+.env
+.env.local
+.env.production
+uploads
+.DS_Store
+
+# Dependencies
+client/node_modules/
+server/node_modules/
+
+# Build output
+client/dist/
+
+# Uploads
+server/uploads/
+
+# Environment files
+client/.env
+client/.env.local
+client/.env.production.local
+
+server/.env
+
+# OS files
+.DS_Store
+Thumbs.db
