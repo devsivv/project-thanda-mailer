@@ -201,10 +201,11 @@ app.post("/send-test-email", upload.single("attachment"), async (req, res) => {
   console.log("REQ FILE:", req.file);
   try {
     const { gmail, appPassword, subject, body } = req.body;
-    
-   dns.lookup("smtp.gmail.com", { all: true }, (err, addresses) => {
+  dns.lookup("smtp.gmail.com", { all: true }, (err, addresses) => {
   console.log("SMTP DNS lookup:", addresses);
 });
+
+console.log("Creating SMTP transporter...");
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
@@ -217,7 +218,15 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-    await transporter.verify();
+try {
+  await transporter.verify();
+  console.log("SMTP verify succeeded");
+} catch (error) {
+  console.error("SMTP verify failed:", error);
+  throw error; // keep existing behavior
+}
+
+
 
     const generatedSubject = subject
       .replaceAll("{{name}}", "Test Name")
