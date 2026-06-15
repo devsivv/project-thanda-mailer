@@ -4,8 +4,8 @@ const NAV_ITEMS = [
   { id: "templates", label: "Templates",        icon: "≡" },
   { id: "campaign-results", label: "Campaign Results", icon: "◎" },
   { id: "history",   label: "History",          icon: "◷" },
-  { id: "setup",     label: "Quick Setup",      icon: "⚙" },
 ];
+
 
 export default function Sidebar({ activePage, navigate, sidebarOpen, setSidebarOpen }) {
   return (

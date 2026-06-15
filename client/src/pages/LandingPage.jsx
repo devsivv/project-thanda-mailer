@@ -9,7 +9,7 @@ export default function LandingPage({ navigate }) {
           Delivered.
         </h1>
         <p className="landing__sub">
-          Send personalized cold emails using your own Gmail account.
+          Send personalized cold emails powered by Resend.
           Upload leads. Personalize automatically. Monitor campaign delivery in real-time.
           Manage campaigns from one place.
         </p>
@@ -17,15 +17,12 @@ export default function LandingPage({ navigate }) {
           <button className="btn btn--primary" onClick={() => navigate("outreach")}>
             Get Started
           </button>
-          <button className="btn btn--ghost" onClick={() => navigate("setup")}>
-            Quick Setup
-          </button>
         </div>
       </div>
 
       <div className="landing__strip">
         {[
-          { icon: "✉", label: "Use Your Gmail" },
+          { icon: "✦", label: "Reliable Cloud Email Delivery" },
           { icon: "↑", label: "CSV Powered" },
           { icon: "◈", label: "Personalized Outreach" },
           { icon: "◎", label: "Campaign Results" },
@@ -49,15 +46,15 @@ export default function LandingPage({ navigate }) {
         <div className="landing__feature-card">
           <div className="landing__feature-title">Campaign Results</div>
           <div className="landing__feature-desc">
-            Monitor campaign delivery and SMTP accepted/rejected rates in real-time,
+            Monitor campaign delivery and accepted/rejected rates in real-time,
             retaining a full breakdown of recipient outcomes.
           </div>
         </div>
         <div className="landing__feature-card">
-          <div className="landing__feature-title">Send With Gmail</div>
+          <div className="landing__feature-title">Powered by Resend</div>
           <div className="landing__feature-desc">
-            Use your own Gmail account securely via App Passwords. No
-            third-party email service or subscription required.
+            Enterprise-grade email infrastructure with high deliverability.
+            No personal credentials required — just upload and send.
           </div>
         </div>
       </div>

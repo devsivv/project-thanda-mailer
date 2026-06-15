@@ -8,7 +8,7 @@ import OutreachBuilderPage from "./pages/OutreachBuilderPage";
 import TemplatesPage       from "./pages/TemplatesPage";
 import CampaignResultsPage from "./pages/CampaignResultsPage";
 import HistoryPage         from "./pages/HistoryPage";
-import QuickSetupPage      from "./pages/QuickSetupPage";
+
 
 const API_URL = import.meta.env.DEV ? "/api" : (import.meta.env.VITE_API_URL || "");
 
@@ -16,8 +16,7 @@ export default function App() {
   // ============================================================
   // STATE
   // ============================================================
-  const [gmail, setGmail]             = useState("");
-  const [appPassword, setAppPassword] = useState("");
+
   const [fileName, setFileName]       = useState("");
   const [file, setFile]               = useState(null);
   const [previews, setPreviews]       = useState([]);
@@ -197,16 +196,13 @@ export default function App() {
   };
 
   const sendTestEmail = async () => {
-    if (!gmail || !appPassword) { showAlert("Credentials Required", "Enter Gmail and App Password"); return; }
-    const testRecipient = window.prompt("Enter the test recipient email address:", gmail || "");
+    const testRecipient = window.prompt("Enter the email address to send the test to:", "");
     if (testRecipient === null) return; // User cancelled
     if (!testRecipient.trim()) { showAlert("Recipient Required", "Please enter a valid recipient email"); return; }
 
     try {
       setSending(true);
       const formData = new FormData();
-      formData.append("gmail", gmail);
-      formData.append("appPassword", appPassword);
       formData.append("subject", subject);
       formData.append("body", body);
       formData.append("testRecipient", testRecipient.trim());
@@ -249,7 +245,6 @@ export default function App() {
   };
 
   const sendEmails = () => {
-    if (!gmail || !appPassword) { showAlert("Credentials Required", "Enter Gmail and App Password"); return; }
     if (contacts.length === 0) { showAlert("No Recipients Loaded", "Generate preview first"); return; }
     setShowLaunchCampaignModal(true);
   };
@@ -266,8 +261,6 @@ export default function App() {
       localStorage.setItem("campaignInProgress", "true");
 
       const formData = new FormData();
-      formData.append("gmail", gmail);
-      formData.append("appPassword", appPassword);
       formData.append("recipients", JSON.stringify(contacts));
       formData.append("subject", subject);
       formData.append("body", body);
@@ -391,8 +384,6 @@ export default function App() {
 
         {activePage === "outreach" && (
           <OutreachBuilderPage
-            gmail={gmail}               setGmail={setGmail}
-            appPassword={appPassword}   setAppPassword={setAppPassword}
             delay={delay}               setDelay={setDelay}
             fileName={fileName}         handleFileChange={handleFileChange}
             uploadCsv={uploadCsv}
@@ -439,9 +430,6 @@ export default function App() {
           <HistoryPage campaignHistory={campaignHistory} />
         )}
 
-        {activePage === "setup" && (
-          <QuickSetupPage />
-        )}
       </main>
 
       {showTestModal && (
@@ -449,8 +437,8 @@ export default function App() {
           <div className="modal-content">
             <div className="modal-title">✓ Test Email Delivered</div>
             <div className="modal-body" style={{ textAlign: "left" }}>
-              <p style={{ marginBottom: "12px" }}>Check the inbox (and spam folder) of the Gmail account configured above.</p>
-              <p>If you received the email successfully, your Gmail credentials are working correctly and you can safely launch your campaign.</p>
+              <p style={{ marginBottom: "12px" }}>Check the inbox (and spam folder) of the recipient address you entered.</p>
+              <p>If you received the email successfully, your campaign is ready to launch.</p>
             </div>
             <button className="btn btn--primary" style={{ width: "100%" }} onClick={() => setShowTestModal(false)}>
               Got It

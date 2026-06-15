@@ -3,8 +3,6 @@ import ProgressCard from "../components/ProgressCard";
 
 export default function OutreachBuilderPage({
   // Campaign settings
-  gmail, setGmail,
-  appPassword, setAppPassword,
   delay, setDelay,
   // Recipients
   fileName, handleFileChange, uploadCsv,
@@ -42,27 +40,6 @@ export default function OutreachBuilderPage({
           {/* Campaign Settings */}
           <div className="card">
             <div className="card__title">Campaign Settings</div>
-            <div className="field">
-              <label className="field__label">Gmail Address</label>
-              <input
-                className="field__input"
-                type="email"
-                value={gmail}
-                onChange={(e) => setGmail(e.target.value)}
-                placeholder="you@gmail.com"
-              />
-            </div>
-            <div className="field">
-              <label className="field__label">App Password</label>
-              <input
-                className="field__input"
-                type="password"
-                value={appPassword}
-                onChange={(e) => setAppPassword(e.target.value)}
-                placeholder="Gmail App Password"
-              />
-              <div className="field__hint">Google Account → Security → App Passwords</div>
-            </div>
             <div className="field">
               <label className="field__label">Send Speed</label>
               <select
@@ -191,7 +168,7 @@ export default function OutreachBuilderPage({
           {/* Action Bar */}
           <div className="action-bar">
             <button className="btn btn--secondary" onClick={sendTestEmail} disabled={sending}>
-              Send Test To Myself
+              Send Test Email
             </button>
             <button
               className="btn btn--primary"

@@ -259,13 +259,16 @@ app.post("/send-test-email", upload.single("attachment"), async (req, res) => {
 app.post("/send-emails", upload.single("attachment"), async (req, res) => {
   try {
     const {
-      gmail,
-      appPassword,
       subject,
       body,
       campaignId,
     } = req.body;
-    
+
+    const sender = process.env.SENDER_EMAIL;
+    if (!sender) {
+      return res.status(500).json({ success: false, error: "SENDER_EMAIL environment variable is not configured" });
+    }
+
     const delayMs = parseInt(req.body.delay) || 2000;
 
     let recipients = req.body.recipients;
@@ -273,39 +276,31 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
       recipients = JSON.parse(recipients);
     }
 
-      if (campaignId) {
-        activeCampaigns[campaignId] = {
-          total: recipients.length,
-          sent: 0,
-          failed: 0,
-          completed: false,
-          completedAt: null,
-          cancelled: false,
-          currentRecipient: "",
-          recentActivity: [],
-          results: [],
-        };
-      }
+    if (campaignId) {
+      activeCampaigns[campaignId] = {
+        total: recipients.length,
+        sent: 0,
+        failed: 0,
+        completed: false,
+        completedAt: null,
+        cancelled: false,
+        currentRecipient: "",
+        recentActivity: [],
+        results: [],
+      };
+    }
 
-    const transporter = nodemailer.createTransport({
-  host: "142.251.163.109",
-  port: 587,
-  secure: false,
-  requireTLS: true,
-  tls: {
-    servername: "smtp.gmail.com"
-  },
-  auth: {
-    user: gmail,
-    pass: appPassword,
-  },
-});
-
-    await transporter.verify();
+    // Read attachment once before the loop (avoids re-reading per recipient)
+    let attachmentContent = null;
+    let attachmentFilename = null;
+    if (req.file) {
+      attachmentContent = fs.readFileSync(req.file.path).toString("base64");
+      attachmentFilename = req.file.originalname;
+    }
 
     let sent = 0;
     const results = [];
-    
+
     for (const contact of recipients) {
       if (campaignId && activeCampaigns[campaignId] && activeCampaigns[campaignId].cancelled) {
         break;
@@ -328,27 +323,37 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
       let generatedHtml = generatedBody.replace(/\n/g, "<br>");
 
       const mailOptions = {
-        from: gmail,
+        from: sender,
         to: contact.email,
         subject: generatedSubject,
         text: generatedBody,
         html: generatedHtml,
       };
 
-      if (req.file) {
-        mailOptions.attachments = [
-          {
-            filename: req.file.originalname,
-            path: req.file.path,
-          },
-        ];
+      if (attachmentContent) {
+        mailOptions.attachments = [{
+          filename: attachmentFilename,
+          content: attachmentContent,
+        }];
       }
 
       try {
-        const info = await transporter.sendMail(mailOptions);
-        const wasAccepted = info.accepted && info.accepted.includes(contact.email);
-        
-        if (wasAccepted) {
+        const { data, error } = await resend.emails.send(mailOptions);
+
+        if (error) {
+          console.error("Resend error for", contact.email, error);
+          const resObj = { email: contact.email, status: "Failed", error: error.message || "Resend API Error" };
+          results.push(resObj);
+          if (campaignId && activeCampaigns[campaignId]) {
+            activeCampaigns[campaignId].failed = (activeCampaigns[campaignId].failed || 0) + 1;
+            activeCampaigns[campaignId].results.push(resObj);
+            activeCampaigns[campaignId].recentActivity.unshift({ email: contact.email, status: "Failed" });
+            if (activeCampaigns[campaignId].recentActivity.length > 1000) {
+              activeCampaigns[campaignId].recentActivity.pop();
+            }
+          }
+        } else {
+          console.log("Sent via Resend to", contact.email, data);
           sent++;
           const resObj = { email: contact.email, status: "Sent", error: "" };
           results.push(resObj);
@@ -356,18 +361,6 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
             activeCampaigns[campaignId].sent = sent;
             activeCampaigns[campaignId].results.push(resObj);
             activeCampaigns[campaignId].recentActivity.unshift({ email: contact.email, status: "Sent" });
-            if (activeCampaigns[campaignId].recentActivity.length > 1000) {
-              activeCampaigns[campaignId].recentActivity.pop();
-            }
-          }
-        } else {
-          const errorMsg = (info.rejected && info.rejected.length > 0) ? "SMTP Rejected" : "SMTP Delivery Failure";
-          const resObj = { email: contact.email, status: "Failed", error: errorMsg };
-          results.push(resObj);
-          if (campaignId && activeCampaigns[campaignId]) {
-            activeCampaigns[campaignId].failed = (activeCampaigns[campaignId].failed || 0) + 1;
-            activeCampaigns[campaignId].results.push(resObj);
-            activeCampaigns[campaignId].recentActivity.unshift({ email: contact.email, status: "Failed" });
             if (activeCampaigns[campaignId].recentActivity.length > 1000) {
               activeCampaigns[campaignId].recentActivity.pop();
             }
@@ -387,9 +380,7 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
         }
       }
 
-      await new Promise((resolve) =>
-        setTimeout(resolve, delayMs)
-      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
 
       if (campaignId && activeCampaigns[campaignId] && activeCampaigns[campaignId].cancelled) {
         break;
@@ -397,7 +388,6 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
     }
 
     if (campaignId && activeCampaigns[campaignId]) {
-      // If loop naturally finishes, update completion properties normally
       activeCampaigns[campaignId].completed = true;
       activeCampaigns[campaignId].completedAt = Date.now();
       activeCampaigns[campaignId].currentRecipient = "";
@@ -416,11 +406,7 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
 
   } catch (error) {
     console.error(error);
-
-    res.status(500).json({
-      success: false,
-      error: error.message,
-    });
+    res.status(500).json({ success: false, error: error.message });
   } finally {
     if (req.file?.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
