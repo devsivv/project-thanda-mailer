@@ -202,18 +202,20 @@ app.post("/send-test-email", upload.single("attachment"), async (req, res) => {
   try {
     const { gmail, appPassword, subject, body } = req.body;
     
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      secure: false,
-      requireTLS: true,
-      debug: true,
-      logger: true,
-      auth: {
-        user: gmail,
-        pass: appPassword,
-      },
-    });
+   dns.lookup("smtp.gmail.com", { all: true }, (err, addresses) => {
+  console.log("SMTP DNS lookup:", addresses);
+});
+
+const transporter = nodemailer.createTransport({
+  host: "smtp.gmail.com",
+  port: 587,
+  secure: false,
+  requireTLS: true,
+  auth: {
+    user: gmail,
+    pass: appPassword,
+  },
+});
 
     await transporter.verify();
 
