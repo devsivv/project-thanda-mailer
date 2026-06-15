@@ -6,12 +6,8 @@ const multer = require("multer");
 const csv = require("csv-parser");
 const fs = require("fs");
 const nodemailer = require("nodemailer");
-
-const dns = require("dns");
-
-// Force IPv4 before IPv6
-dns.setDefaultResultOrder("ipv4first");
-console.log("DNS IPv4 override enabled");
+const { Resend } = require("resend");
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 const app = express();
 
@@ -200,52 +196,33 @@ app.post("/send-test-email", upload.single("attachment"), async (req, res) => {
   console.log("REQ BODY:", req.body);
   console.log("REQ FILE:", req.file);
   try {
-    const { gmail, appPassword, subject, body } = req.body;
-  dns.lookup("smtp.gmail.com", { all: true }, (err, addresses) => {
-  console.log("SMTP DNS lookup:", addresses);
-});
+    const { gmail, appPassword, subject, body, testRecipient } = req.body;
 
-console.log("Creating SMTP transporter...");
+    const recipient = testRecipient || gmail;
+    if (!recipient) {
+      return res.status(400).json({ success: false, error: "Recipient email is required" });
+    }
 
-const transporter = nodemailer.createTransport({
-  host: "142.251.163.109",
-  port: 587,
-  secure: false,
-  requireTLS: true,
-  tls: {
-    servername: "smtp.gmail.com"
-  },
-  auth: {
-    user: gmail,
-    pass: appPassword,
-  },
-});
-
-try {
-  await transporter.verify();
-  console.log("SMTP verify succeeded");
-} catch (error) {
-  console.error("SMTP verify failed:", error);
-  throw error; // keep existing behavior
-}
-
-
+    const sender = process.env.SENDER_EMAIL;
+    if (!sender) {
+      return res.status(500).json({ success: false, error: "SENDER_EMAIL environment variable is not configured" });
+    }
 
     const generatedSubject = subject
       .replaceAll("{{name}}", "Test Name")
       .replaceAll("{{company}}", "Test Company")
-      .replaceAll("{{email}}", gmail);
+      .replaceAll("{{email}}", recipient);
 
     const generatedBody = body
       .replaceAll("{{name}}", "Test Name")
       .replaceAll("{{company}}", "Test Company")
-      .replaceAll("{{email}}", gmail);
+      .replaceAll("{{email}}", recipient);
 
     let generatedHtml = generatedBody.replace(/\n/g, "<br>");
 
     const mailOptions = {
-      from: gmail,
-      to: gmail,
+      from: sender,
+      to: recipient,
       subject: generatedSubject,
       text: generatedBody,
       html: generatedHtml,
@@ -254,15 +231,21 @@ try {
     if (req.file) {
       mailOptions.attachments = [{
         filename: req.file.originalname,
-        path: req.file.path,
+        content: fs.readFileSync(req.file.path).toString("base64"),
       }];
     }
 
-    console.log("MAIL OPTIONS:", mailOptions);
-    console.log("ABOUT TO SEND EMAIL");
-    await transporter.sendMail(mailOptions);
-    console.log("EMAIL SENT SUCCESSFULLY");
-    res.json({ success: true, message: "Test email sent successfully" });
+    console.log("RESEND OPTIONS:", mailOptions);
+    console.log("ABOUT TO SEND EMAIL VIA RESEND API");
+    const { data, error } = await resend.emails.send(mailOptions);
+
+    if (error) {
+      console.error("RESEND API ERROR:", error);
+      return res.status(400).json({ success: false, error: error.message });
+    }
+
+    console.log("EMAIL SENT SUCCESSFULLY VIA RESEND API", data);
+    res.json({ success: true, message: "Test email sent successfully", data });
   } catch (error) {
     console.error("TEST EMAIL ERROR:", error);
     res.status(500).json({ success: false, error: error.message });

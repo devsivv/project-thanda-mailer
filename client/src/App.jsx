@@ -198,6 +198,10 @@ export default function App() {
 
   const sendTestEmail = async () => {
     if (!gmail || !appPassword) { showAlert("Credentials Required", "Enter Gmail and App Password"); return; }
+    const testRecipient = window.prompt("Enter the test recipient email address:", gmail || "");
+    if (testRecipient === null) return; // User cancelled
+    if (!testRecipient.trim()) { showAlert("Recipient Required", "Please enter a valid recipient email"); return; }
+
     try {
       setSending(true);
       const formData = new FormData();
@@ -205,6 +209,7 @@ export default function App() {
       formData.append("appPassword", appPassword);
       formData.append("subject", subject);
       formData.append("body", body);
+      formData.append("testRecipient", testRecipient.trim());
       if (attachment) formData.append("attachment", attachment);
       
       const response = await fetch(`${API_URL}/send-test-email`, { method: "POST", body: formData });
