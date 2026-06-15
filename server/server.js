@@ -11,6 +11,7 @@ const dns = require("dns");
 
 // Force IPv4 before IPv6
 dns.setDefaultResultOrder("ipv4first");
+console.log("DNS IPv4 override enabled");
 
 const app = express();
 
