@@ -31,6 +31,8 @@ const upload = multer({
   }
 });
 
+const vercelPreviewRegex = /^https:\/\/project-thanda-mailer-.*\.vercel\.app$/;
+
 const allowedOrigins = [
   "http://localhost:5173",
   "http://localhost:5174",
@@ -43,19 +45,24 @@ const allowedOrigins = [
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      console.log("CORS check for origin:", origin);
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.error("CORS blocked origin:", origin);
-        callback(new Error("Not allowed by CORS"));
-      }
+const corsOptions = {
+  origin: function (origin, callback) {
+    console.log("CORS check for origin:", origin);
+    if (!origin || allowedOrigins.includes(origin) || vercelPreviewRegex.test(origin)) {
+      callback(null, true);
+    } else {
+      console.error("CORS blocked origin:", origin);
+      callback(new Error("Not allowed by CORS"));
     }
-  })
-);
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true,
+  optionsSuccessStatus: 200,
+};
+
+app.use(cors(corsOptions));
+app.options(/.*/, cors(corsOptions));
 app.use(express.json());
 
 app.get("/", (req, res) => {
@@ -457,6 +464,7 @@ app.post("/send-emails", requireAuth, upload.single("attachment"), async (req, r
 
 // ── Auth middleware: verifies Supabase JWT, attaches req.userId ──
 async function requireAuth(req, res, next) {
+  if (req.method === "OPTIONS") return next();
   const authHeader = req.headers["authorization"] || "";
   const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
   if (!token) {
@@ -653,4 +661,4 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`BASE_URL: ${BASE_URL}`);
-});
+});
