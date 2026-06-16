@@ -12,8 +12,8 @@ export default function Sidebar({ activePage, navigate, sidebarOpen, setSidebarO
     <>
       <aside className={`sidebar${sidebarOpen ? " sidebar--open" : ""}`}>
         <div className="sidebar__logo">
-          <div className="sidebar__logo-title">Thanda Mailer</div>
-          <div className="sidebar__logo-sub">Cold outreach simplified</div>
+          <div className="sidebar__logo-title">Thanda Mail</div>
+          <div className="sidebar__logo-sub">Cold outreach. Delivered reliably.</div>
         </div>
 
         <nav className="sidebar__nav">
@@ -29,7 +29,7 @@ export default function Sidebar({ activePage, navigate, sidebarOpen, setSidebarO
           ))}
         </nav>
 
-        <div className="sidebar__footer">Thanda Mailer · v1.0</div>
+        <div className="sidebar__footer">Thanda Mail · v2.0</div>
       </aside>
 
       {sidebarOpen && (

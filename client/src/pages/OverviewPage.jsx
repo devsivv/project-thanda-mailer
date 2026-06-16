@@ -4,9 +4,12 @@ export default function OverviewPage({
   campaignHistory,
   totalRecipients,
   totalAccepted,
-  totalRejected,
   navigate,
 }) {
+  const successRate = totalRecipients > 0
+    ? `${Math.round((totalAccepted / totalRecipients) * 100)}%`
+    : "—";
+
   return (
     <div className="page">
       <div className="page-header">
@@ -17,10 +20,10 @@ export default function OverviewPage({
       </div>
 
       <div className="metric-grid">
-        <MetricCard label="SMTP Accepted" value={totalAccepted} />
-        <MetricCard label="SMTP Rejected" value={totalRejected} />
-        <MetricCard label="Total Recipients" value={totalRecipients} />
-        <MetricCard label="Campaigns"     value={campaignHistory.length} />
+        <MetricCard label="Campaigns Run"     value={campaignHistory.length} />
+        <MetricCard label="Total Recipients"  value={totalRecipients} />
+        <MetricCard label="Delivered"         value={totalAccepted} />
+        <MetricCard label="Success Rate"      value={successRate} accent />
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: "16px" }}>
@@ -31,16 +34,16 @@ export default function OverviewPage({
               <div className="empty-state__icon">📭</div>
               <div className="empty-state__title">No campaigns yet</div>
               <div className="empty-state__desc">
-                Launch your first campaign from the Outreach Builder.
+                Launch your first campaign from the Outreach Builder to see results here.
               </div>
             </div>
           ) : (
             campaignHistory.slice(0, 5).map((h, i) => (
               <div key={i} className="campaign-list-item">
                 <div>
-                  <div className="campaign-list-item__name">{h.date}</div>
+                  <div className="campaign-list-item__name">{h.subject || h.date}</div>
                   <div className="campaign-list-item__meta">
-                    {h.sentCount} accepted · {h.failedCount} rejected · {h.recipientCount} total
+                    {h.sentCount} delivered · {h.failedCount} failed · {h.recipientCount} total · {h.date}
                   </div>
                 </div>
                 <span className={`badge ${h.cancelled ? "badge--warning" : "badge--success"}`}>
@@ -54,10 +57,10 @@ export default function OverviewPage({
         <div className="card">
           <div className="card__title">Quick Actions</div>
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-            <button className="btn btn--primary btn--full"    onClick={() => navigate("outreach")}>New Campaign</button>
-            <button className="btn btn--secondary btn--full"  onClick={() => navigate("templates")}>Create Template</button>
-            <button className="btn btn--secondary btn--full"  onClick={() => navigate("campaign-results")}>Campaign Results</button>
-            <button className="btn btn--secondary btn--full"  onClick={() => navigate("history")}>Campaign History</button>
+            <button className="btn btn--primary btn--full"   aria-label="Start a new campaign" onClick={() => navigate("outreach")}>New Campaign</button>
+            <button className="btn btn--secondary btn--full" aria-label="Manage templates"     onClick={() => navigate("templates")}>Templates</button>
+            <button className="btn btn--secondary btn--full" aria-label="View campaign results" onClick={() => navigate("campaign-results")}>Campaign Results</button>
+            <button className="btn btn--secondary btn--full" aria-label="View campaign history" onClick={() => navigate("history")}>Campaign History</button>
           </div>
         </div>
       </div>

@@ -8,7 +8,7 @@ import OutreachBuilderPage from "./pages/OutreachBuilderPage";
 import TemplatesPage       from "./pages/TemplatesPage";
 import CampaignResultsPage from "./pages/CampaignResultsPage";
 import HistoryPage         from "./pages/HistoryPage";
-
+import TestEmailModal      from "./components/TestEmailModal";
 
 const API_URL = import.meta.env.DEV ? "/api" : (import.meta.env.VITE_API_URL || "");
 
@@ -32,6 +32,7 @@ export default function App() {
   const [lastCampaignId, setLastCampaignId] = useState(null);
   const [templateMessage, setTemplateMessage] = useState("");
   const [showTestModal, setShowTestModal] = useState(false);
+  const [showTestEmailModal, setShowTestEmailModal] = useState(false);
   const [deleteTemplateIdx, setDeleteTemplateIdx] = useState(null);
   const [showCancelCampaignModal, setShowCancelCampaignModal] = useState(false);
   const [alertModal, setAlertModal] = useState({ open: false, title: "", body: "" });
@@ -210,42 +211,36 @@ export default function App() {
     }
   };
 
-  const sendTestEmail = async () => {
-    const testRecipient = window.prompt("Enter the email address to send the test to:", "");
-    if (testRecipient === null) return; // User cancelled
-    if (!testRecipient.trim()) { showAlert("Recipient Required", "Please enter a valid recipient email"); return; }
+  const sendTestEmail = () => {
+    setShowTestEmailModal(true);
+  };
 
+  const sendTestEmailToAddress = async (testRecipient) => {
     try {
       setSending(true);
       const formData = new FormData();
       formData.append("subject", subject);
       formData.append("body", body);
-      formData.append("testRecipient", testRecipient.trim());
+      formData.append("testRecipient", testRecipient);
       if (attachment) formData.append("attachment", attachment);
-      
+
       const response = await fetch(`${API_URL}/send-test-email`, { method: "POST", body: formData });
-      
+
       if (!response.ok) {
         let errorMsg = `Server returned status ${response.status}`;
         try {
           const errorData = await response.json();
-          if (errorData && errorData.error) {
-            errorMsg = errorData.error;
-          }
-        } catch (jsonErr) {
-          console.warn("Could not parse error JSON:", jsonErr);
-          try {
-            const text = await response.text();
-            if (text) errorMsg = text.substring(0, 100);
-          } catch (textErr) {
-            console.warn("Could not read error text:", textErr);
-          }
+          if (errorData && errorData.error) errorMsg = errorData.error;
+        } catch {
+          try { const text = await response.text(); if (text) errorMsg = text.substring(0, 100); } catch { /* ignore */ }
         }
+        setShowTestEmailModal(false);
         showAlert("Test Email Failed", errorMsg);
         return;
       }
-      
+
       const data = await response.json();
+      setShowTestEmailModal(false);
       if (data.success) {
         setShowTestModal(true);
       } else {
@@ -253,7 +248,8 @@ export default function App() {
       }
     } catch (error) {
       console.error(error);
-      showAlert("Test Email Failed", `Network or parser error: ${error.message}`);
+      setShowTestEmailModal(false);
+      showAlert("Test Email Failed", `Network error: ${error.message}`);
     } finally {
       setSending(false);
     }
@@ -323,6 +319,7 @@ export default function App() {
         const newHistory = [
           {
             date: new Date().toLocaleString(),
+            subject: subject || "Untitled Campaign",
             recipientCount: contacts.length,
             sentCount: data.sent,
             failedCount: (data.results || []).filter((r) => r.status === "Failed").length,
@@ -447,13 +444,20 @@ export default function App() {
 
       </main>
 
+      {showTestEmailModal && (
+        <TestEmailModal
+          onClose={() => setShowTestEmailModal(false)}
+          onSend={sendTestEmailToAddress}
+        />
+      )}
+
       {showTestModal && (
         <div className="modal-overlay">
           <div className="modal-content">
-            <div className="modal-title">✓ Test Email Delivered</div>
+            <div className="modal-title">✓ Test Email Sent</div>
             <div className="modal-body" style={{ textAlign: "left" }}>
               <p style={{ marginBottom: "12px" }}>Check the inbox (and spam folder) of the recipient address you entered.</p>
-              <p>If you received the email successfully, your campaign is ready to launch.</p>
+              <p>If the email arrived, your campaign is ready to launch.</p>
             </div>
             <button className="btn btn--primary" style={{ width: "100%" }} onClick={() => setShowTestModal(false)}>
               Got It

@@ -9,10 +9,9 @@ export default function CampaignResultsPage({ lastCampaignResults }) {
 
   const resultsList = lastCampaignResults?.results || [];
 
-  // Filter list by query & category
   const filteredResults = resultsList.filter((r) => {
-    if (filter === "Accepted" && r.status !== "Accepted") return false;
-    if (filter === "Rejected" && r.status !== "Rejected") return false;
+    if (filter === "Delivered" && r.status !== "Sent") return false;
+    if (filter === "Failed" && r.status !== "Failed") return false;
     if (searchQuery.trim() !== "") {
       return r.email.toLowerCase().includes(searchQuery.toLowerCase());
     }
@@ -30,7 +29,7 @@ export default function CampaignResultsPage({ lastCampaignResults }) {
       <div className="page-header">
         <div>
           <div className="page-title">Campaign Results</div>
-          <div className="page-subtitle">Actual SMTP sending results for your latest campaign</div>
+          <div className="page-subtitle">Delivery breakdown for your latest campaign</div>
         </div>
       </div>
 
@@ -38,14 +37,14 @@ export default function CampaignResultsPage({ lastCampaignResults }) {
         <>
           <div className="metric-grid">
             <MetricCard label="Total Recipients" value={lastCampaignResults.total} />
-            <MetricCard label="SMTP Accepted" value={lastCampaignResults.acceptedCount} />
-            <MetricCard label="SMTP Rejected" value={lastCampaignResults.rejectedCount} />
+            <MetricCard label="Delivered" value={lastCampaignResults.acceptedCount} />
+            <MetricCard label="Failed" value={lastCampaignResults.rejectedCount} />
             <MetricCard label="Success Rate" value={lastCampaignResults.successRate} accent />
           </div>
 
           <div className="card">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px", gap: "16px", flexWrap: "wrap" }}>
-              <div className="card__title" style={{ marginBottom: 0 }}>Recipient Sending Status</div>
+              <div className="card__title" style={{ marginBottom: 0 }}>Recipient Delivery Status</div>
               <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", alignItems: "center" }}>
                 <input
                   type="text"
@@ -53,17 +52,19 @@ export default function CampaignResultsPage({ lastCampaignResults }) {
                   style={{ width: "220px", marginBottom: 0, padding: "6px 12px", fontSize: "13px" }}
                   placeholder="Search email..."
                   value={searchQuery}
+                  aria-label="Search recipient email"
                   onChange={(e) => {
                     setSearchQuery(e.target.value);
                     setCurrentPage(1);
                   }}
                 />
                 <div style={{ display: "flex", gap: "6px" }}>
-                  {["All", "Accepted", "Rejected"].map((opt) => (
+                  {["All", "Delivered", "Failed"].map((opt) => (
                     <button
                       key={opt}
                       className={`btn ${filter === opt ? "btn--primary" : "btn--secondary"} btn--sm`}
                       style={{ padding: "6px 14px", fontSize: "12px" }}
+                      aria-pressed={filter === opt}
                       onClick={() => {
                         setFilter(opt);
                         setCurrentPage(1);
@@ -88,17 +89,20 @@ export default function CampaignResultsPage({ lastCampaignResults }) {
                       </tr>
                     </thead>
                     <tbody>
-                      {paginatedResults.map((r, i) => (
-                        <tr key={i}>
-                          <td>{r.email}</td>
-                          <td>
-                            <span className={`badge ${r.status === "Accepted" ? "badge--success" : "badge--danger"}`}>
-                              {r.status}
-                            </span>
-                          </td>
-                          <td style={{ color: "var(--danger)", fontSize: "12px" }}>{r.error || "—"}</td>
-                        </tr>
-                      ))}
+                      {paginatedResults.map((r, i) => {
+                        const delivered = r.status === "Sent";
+                        return (
+                          <tr key={i}>
+                            <td>{r.email}</td>
+                            <td>
+                              <span className={`badge ${delivered ? "badge--success" : "badge--danger"}`}>
+                                {delivered ? "Delivered" : "Failed"}
+                              </span>
+                            </td>
+                            <td style={{ color: "var(--danger)", fontSize: "12px" }}>{r.error || "—"}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -106,13 +110,14 @@ export default function CampaignResultsPage({ lastCampaignResults }) {
                 {totalRows > pageSize && (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "16px", borderTop: "1px solid var(--border)", paddingTop: "14px" }}>
                     <span style={{ fontSize: "12.5px", color: "var(--text-2)" }}>
-                      Showing {startIndex + 1} to {Math.min(startIndex + pageSize, totalRows)} of {totalRows} results
+                      Showing {startIndex + 1}–{Math.min(startIndex + pageSize, totalRows)} of {totalRows} results
                     </span>
                     <div style={{ display: "flex", gap: "8px" }}>
                       <button
                         className="btn btn--secondary btn--sm"
                         style={{ padding: "6px 12px", fontSize: "12px" }}
                         disabled={activePage === 1}
+                        aria-label="Previous page"
                         onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       >
                         Previous
@@ -121,6 +126,7 @@ export default function CampaignResultsPage({ lastCampaignResults }) {
                         className="btn btn--secondary btn--sm"
                         style={{ padding: "6px 12px", fontSize: "12px" }}
                         disabled={activePage === totalPages}
+                        aria-label="Next page"
                         onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       >
                         Next
@@ -140,9 +146,9 @@ export default function CampaignResultsPage({ lastCampaignResults }) {
         <div className="card">
           <div className="empty-state">
             <div className="empty-state__icon">📊</div>
-            <div className="empty-state__title">No campaign results available yet.</div>
+            <div className="empty-state__title">No campaign results yet</div>
             <div className="empty-state__desc">
-              Send a campaign to view results.
+              Launch a campaign from the Outreach Builder to see delivery results here.
             </div>
           </div>
         </div>
