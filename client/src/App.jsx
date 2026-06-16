@@ -150,15 +150,30 @@ export default function App() {
       formData.append("subject", subject);
       formData.append("body", body);
       const response = await fetch(`${API_URL}/upload`, { method: "POST", body: formData });
+
+      if (!response.ok) {
+        let errMsg = `Server returned ${response.status}`;
+        try {
+          const errData = await response.json();
+          if (errData && errData.error) errMsg = errData.error;
+        } catch {
+          const text = await response.text().catch(() => "");
+          if (text && !text.startsWith("<!")) errMsg = text.substring(0, 200);
+        }
+        showAlert("Upload Failed", errMsg);
+        return;
+      }
+
       const data = await response.json();
       setPreviews(data.previews || []);
       setContacts(data.allContacts || []);
       showAlert("CSV Loaded", `${data.contacts || 0} contacts loaded successfully. ${data.duplicatesRemoved || 0} duplicates removed.`);
     } catch (error) {
       console.error(error);
-      showAlert("Upload Failed", "An error occurred while uploading the CSV file. Please check the file format and try again.");
+      showAlert("Upload Failed", `Network error: ${error.message}`);
     }
   };
+
 
   const saveTemplate = () => {
     if (!templateName) { showAlert("Template Name Required", "Please enter a template name"); return; }

@@ -22,7 +22,13 @@ const upload = multer({
 
 const allowedOrigins = [
   "http://localhost:5173",
+  "http://localhost:5174",
+  "http://localhost:5175",
+  "http://localhost:5176",
   "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+  "http://127.0.0.1:5175",
+  "http://127.0.0.1:5176",
   process.env.FRONTEND_URL
 ].filter(Boolean);
 
@@ -56,6 +62,9 @@ app.post(
   "/upload",
   upload.single("file"),
   (req, res) => {
+    console.log("UPLOAD ROUTE HIT");
+    console.log("REQ.FILE:", req.file);
+    console.log("REQ.BODY keys:", Object.keys(req.body || {}));
     try {
       if (!req.file) {
         return res.status(400).json({
@@ -414,9 +423,18 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
   }
 });
 
+// ── Multer / busboy error handler (catches file-size limit etc.) ──
+app.use((err, req, res, next) => {
+  console.error("UNHANDLED EXPRESS ERROR:", err.message, err.code);
+  if (err.code === "LIMIT_FILE_SIZE") {
+    return res.status(413).json({ success: false, error: "File too large. Maximum size is 10MB." });
+  }
+  res.status(500).json({ success: false, error: err.message, stack: err.stack });
+});
+
 const PORT = process.env.PORT || 5000;
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`BASE_URL: ${BASE_URL}`);
-});
+});
