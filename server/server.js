@@ -399,6 +399,7 @@ app.post("/send-emails", requireAuth, upload.single("attachment"), async (req, r
             activeCampaigns[campaignId].recentActivity.pop();
           }
         }
+        console.log(`[Backend Send Log] recipient email: ${contact.email}, recipient status written: Sent, sent_count: ${sent}, failed_count: ${campaignId && activeCampaigns[campaignId] ? activeCampaigns[campaignId].failed || 0 : 0}`);
       } catch (err) {
         console.error(`Failed to send via ${profile.provider} to`, contact.email, err);
         const resObj = { email: contact.email, status: "Failed", error: err.message || "Connection Error" };
@@ -411,6 +412,7 @@ app.post("/send-emails", requireAuth, upload.single("attachment"), async (req, r
             activeCampaigns[campaignId].recentActivity.pop();
           }
         }
+        console.log(`[Backend Send Log] recipient email: ${contact.email}, recipient status written: Failed, sent_count: ${sent}, failed_count: ${campaignId && activeCampaigns[campaignId] ? activeCampaigns[campaignId].failed || 0 : 0}`);
       }
 
       if (campaignId && activeCampaigns[campaignId]) {

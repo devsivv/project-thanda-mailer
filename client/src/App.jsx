@@ -104,9 +104,15 @@ export default function App() {
             const total = statusData.total || results.length;
             const successRate = total > 0 ? `${Math.round((acceptedCount / total) * 100)}%` : "0%";
 
+            // Log recipient status and counters
+            console.log("=== Campaign Polling Complete ===");
+            results.forEach(r => {
+              console.log(`[Frontend Poll Log] Recipient: ${r.email}, Status: ${r.status}, sent_count: ${acceptedCount}, failed_count: ${rejectedCount}`);
+            });
+
             const mappedResults = results.map(r => ({
               email: r.email,
-              status: r.status === "Sent" ? "Accepted" : "Rejected",
+              status: r.status,
               error: r.error || ""
             }));
 
@@ -324,9 +330,15 @@ export default function App() {
         const total = contacts.length;
         const successRate = total > 0 ? `${Math.round((acceptedCount / total) * 100)}%` : "0%";
 
+        // Log recipient status and counters
+        console.log("=== Campaign Execute Complete ===");
+        results.forEach(r => {
+          console.log(`[Frontend Execute Log] Recipient: ${r.email}, Status: ${r.status}, sent_count: ${acceptedCount}, failed_count: ${rejectedCount}`);
+        });
+
         const mappedResults = results.map(r => ({
           email: r.email,
-          status: r.status === "Sent" ? "Accepted" : "Rejected",
+          status: r.status,
           error: r.error || ""
         }));
 
