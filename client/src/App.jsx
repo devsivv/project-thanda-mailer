@@ -79,7 +79,11 @@ export default function App() {
   const startPolling = (campaignId) => {
     const pollInterval = setInterval(async () => {
       try {
-        const res = await fetch(`${API_URL}/campaign-status/${campaignId}`);
+        const res = await fetch(`${API_URL}/campaign-status/${campaignId}`, {
+          headers: {
+            Authorization: `Bearer ${session?.access_token}`,
+          },
+        });
         if (res.ok) {
           const statusData = await res.json();
           console.log("[Frontend] campaign status transitioned:", statusData);
@@ -152,6 +156,7 @@ export default function App() {
       }, 0);
       startPolling(savedCampaignId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFileChange = (e) => {

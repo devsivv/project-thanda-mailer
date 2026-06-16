@@ -1,8 +1,7 @@
-require("dotenv").config();
-
-
 const dns = require("dns");
 dns.setDefaultResultOrder("ipv4first");
+
+require("dotenv").config();
 
 const express    = require("express");
 const cors       = require("cors");
@@ -200,12 +199,28 @@ I wanted to reach out because...`;
 
 const activeCampaigns = {};
 
-app.get("/campaign-status/:id", (req, res) => {
-  const campaign = activeCampaigns[req.params.id];
-  if (!campaign) {
-    return res.status(404).json({ error: "Campaign not found" });
+app.get("/campaign-status/:campaignId", requireAuth, async (req, res) => {
+  try {
+    const { campaignId } = req.params;
+    const { data, error } = await supabaseAdmin
+      .from("campaigns")
+      .select("*")
+      .eq("id", campaignId)
+      .eq("user_id", req.userId)
+      .single();
+
+    if (error) {
+      if (error.code === "PGRST116") {
+        return res.status(404).json({ error: "Campaign not found" });
+      }
+      throw error;
+    }
+
+    res.json(data);
+  } catch (err) {
+    console.error("GET /campaign-status error:", err.message);
+    res.status(500).json({ error: err.message });
   }
-  res.json(campaign);
 });
 
 app.post("/cancel-campaign/:campaignId", (req, res) => {
