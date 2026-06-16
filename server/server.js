@@ -1,5 +1,8 @@
 require("dotenv").config();
 
+const dns = require("dns");
+dns.setDefaultResultOrder("ipv4first");
+
 const express    = require("express");
 const cors       = require("cors");
 const multer     = require("multer");
@@ -608,6 +611,7 @@ app.post("/test-connection", requireAuth, async (req, res) => {
         port: Number(smtp_port),
         secure: Number(smtp_port) === 465,
         auth: { user: smtp_username, pass: smtp_password },
+        family: 4,
       });
       await transporter.verify();
       return res.json({ success: true, message: "SMTP connection verified successfully" });

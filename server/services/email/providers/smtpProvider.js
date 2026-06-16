@@ -11,6 +11,7 @@ async function send({ credentials, to, subject, html, attachments }) {
       user: smtp_username,
       pass: smtp_password,
     },
+    family: 4,
   });
 
   const mailOptions = {
