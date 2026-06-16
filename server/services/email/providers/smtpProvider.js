@@ -12,6 +12,10 @@ async function send({ credentials, to, subject, html, attachments }) {
       pass: smtp_password,
     },
     family: 4,
+
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 15000,
   });
 
   const mailOptions = {
