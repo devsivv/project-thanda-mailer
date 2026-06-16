@@ -8,11 +8,22 @@ import OutreachBuilderPage from "./pages/OutreachBuilderPage";
 import TemplatesPage       from "./pages/TemplatesPage";
 import CampaignResultsPage from "./pages/CampaignResultsPage";
 import HistoryPage         from "./pages/HistoryPage";
+import SettingsPage        from "./pages/SettingsPage";
 import TestEmailModal      from "./components/TestEmailModal";
+import LoginPage           from "./pages/LoginPage";
+import SignupPage          from "./pages/SignupPage";
+import { useAuth }         from "./context/useAuth";
+
 
 const API_URL = import.meta.env.DEV ? "/api" : (import.meta.env.VITE_API_URL || "");
 
 export default function App() {
+  // ============================================================
+  // AUTH STATE (must be first hooks — hooks cannot be conditional)
+  // ============================================================
+  const { user, session, loading: authLoading, signOut } = useAuth();
+  const [authPage, setAuthPage] = useState("login"); // "login" | "signup"
+
   // ============================================================
   // STATE
   // ============================================================
@@ -71,6 +82,7 @@ export default function App() {
         const res = await fetch(`${API_URL}/campaign-status/${campaignId}`);
         if (res.ok) {
           const statusData = await res.json();
+          console.log("[Frontend] campaign status transitioned:", statusData);
           setProgress({ 
             total: statusData.total, 
             sent: statusData.sent,
@@ -224,7 +236,13 @@ export default function App() {
       formData.append("testRecipient", testRecipient);
       if (attachment) formData.append("attachment", attachment);
 
-      const response = await fetch(`${API_URL}/send-test-email`, { method: "POST", body: formData });
+      const response = await fetch(`${API_URL}/send-test-email`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: formData,
+      });
 
       if (!response.ok) {
         let errorMsg = `Server returned status ${response.status}`;
@@ -281,9 +299,15 @@ export default function App() {
 
       startPolling(campaignId);
 
-      const response = await fetch(`${API_URL}/send-emails`, { method: "POST", body: formData });
+      const response = await fetch(`${API_URL}/send-emails`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`,
+        },
+        body: formData,
+      });
       const data = await response.json();
-
+      console.log("[Frontend] response from /send-emails:", data);
       if (data.success) {
         setSendResults(data.results || []);
         const skipped = contacts.length - (data.results || []).length;
@@ -370,6 +394,26 @@ export default function App() {
   // ============================================================
   // RENDER
   // ============================================================
+
+  // 1. Loading — Supabase is resolving the persisted session
+  if (authLoading) {
+    return (
+      <div className="auth-loading" role="status" aria-label="Loading">
+        <div className="auth-loading__spinner" />
+        <div className="auth-loading__text">Loading Thanda Mail…</div>
+      </div>
+    );
+  }
+
+  // 2. Auth gate — show Login or Signup if not authenticated
+  if (!user) {
+    if (authPage === "signup") {
+      return <SignupPage onSwitchToLogin={() => setAuthPage("login")} />;
+    }
+    return <LoginPage onSwitchToSignup={() => setAuthPage("signup")} />;
+  }
+
+  // 3. Authenticated — render full application
   return (
     <div className="app">
       <Sidebar
@@ -377,12 +421,15 @@ export default function App() {
         navigate={navigate}
         sidebarOpen={sidebarOpen}
         setSidebarOpen={setSidebarOpen}
+        userEmail={user?.email}
+        onSignOut={signOut}
       />
 
       <main className="main">
         {activePage === "landing" && (
           <LandingPage navigate={navigate} />
         )}
+
 
         {activePage === "overview" && (
           <OverviewPage
@@ -440,6 +487,10 @@ export default function App() {
 
         {activePage === "history" && (
           <HistoryPage campaignHistory={campaignHistory} />
+        )}
+
+        {activePage === "settings" && (
+          <SettingsPage />
         )}
 
       </main>

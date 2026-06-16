@@ -1,13 +1,21 @@
 require("dotenv").config();
 
-const express = require("express");
-const cors = require("cors");
-const multer = require("multer");
-const csv = require("csv-parser");
-const fs = require("fs");
+const express    = require("express");
+const cors       = require("cors");
+const multer     = require("multer");
+const csv        = require("csv-parser");
+const fs         = require("fs");
 const nodemailer = require("nodemailer");
 const { Resend } = require("resend");
-const resend = new Resend(process.env.RESEND_API_KEY);
+const { createClient } = require("@supabase/supabase-js");
+const { sendEmail }    = require("./services/email/sendEmail");
+
+// Supabase admin client — service role, bypasses RLS
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY,
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
 
 const app = express();
 
@@ -201,20 +209,29 @@ app.post("/cancel-campaign/:campaignId", (req, res) => {
   return res.status(404).json({ error: "Campaign not found" });
 });
 
-app.post("/send-test-email", upload.single("attachment"), async (req, res) => {
+app.post("/send-test-email", requireAuth, upload.single("attachment"), async (req, res) => {
   console.log("REQ BODY:", req.body);
   console.log("REQ FILE:", req.file);
   try {
-    const { gmail, appPassword, subject, body, testRecipient } = req.body;
+    const { gmail, subject, body, testRecipient } = req.body;
 
     const recipient = testRecipient || gmail;
     if (!recipient) {
       return res.status(400).json({ success: false, error: "Recipient email is required" });
     }
 
-    const sender = process.env.SENDER_EMAIL;
-    if (!sender) {
-      return res.status(500).json({ success: false, error: "SENDER_EMAIL environment variable is not configured" });
+    // Load user's sender profile
+    const { data: profile, error: dbError } = await supabaseAdmin
+      .from("sender_profiles")
+      .select("*")
+      .eq("user_id", req.userId)
+      .single();
+
+    if (dbError && dbError.code !== "PGRST116") {
+      throw dbError;
+    }
+    if (!profile) {
+      return res.status(400).json({ success: false, error: "Please configure your sender profile in Settings first." });
     }
 
     const generatedSubject = subject
@@ -229,35 +246,36 @@ app.post("/send-test-email", upload.single("attachment"), async (req, res) => {
 
     let generatedHtml = generatedBody.replace(/\n/g, "<br>");
 
-    const mailOptions = {
-      from: sender,
-      to: recipient,
-      subject: generatedSubject,
-      text: generatedBody,
-      html: generatedHtml,
-    };
-
+    const attachments = [];
     if (req.file) {
-      mailOptions.attachments = [{
+      attachments.push({
         filename: req.file.originalname,
         content: fs.readFileSync(req.file.path).toString("base64"),
-      }];
+      });
     }
 
-    console.log("RESEND OPTIONS:", mailOptions);
-    console.log("ABOUT TO SEND EMAIL VIA RESEND API");
-    const { data, error } = await resend.emails.send(mailOptions);
+    console.log(`ABOUT TO SEND EMAIL VIA ${profile.provider.toUpperCase()} PROVIDER SERVICE`);
+    const result = await sendEmail({
+      provider: profile.provider,
+      credentials: {
+        sender_email: profile.sender_email,
+        smtp_host: profile.smtp_host,
+        smtp_port: profile.smtp_port,
+        smtp_username: profile.smtp_username,
+        smtp_password: profile.smtp_password,
+        resend_api_key: profile.resend_api_key,
+      },
+      to: recipient,
+      subject: generatedSubject,
+      html: generatedHtml,
+      attachments,
+    });
 
-    if (error) {
-      console.error("RESEND API ERROR:", error);
-      return res.status(400).json({ success: false, error: error.message });
-    }
-
-    console.log("EMAIL SENT SUCCESSFULLY VIA RESEND API", data);
-    res.json({ success: true, message: "Test email sent successfully", data });
+    console.log("EMAIL SENT SUCCESSFULLY VIA PROVIDER SERVICE", result);
+    res.json({ success: true, message: "Test email sent successfully", data: result });
   } catch (error) {
     console.error("TEST EMAIL ERROR:", error);
-    res.status(500).json({ success: false, error: error.message });
+    res.status(400).json({ success: false, error: error.message });
   } finally {
     if (req.file?.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
@@ -265,7 +283,7 @@ app.post("/send-test-email", upload.single("attachment"), async (req, res) => {
   }
 });
 
-app.post("/send-emails", upload.single("attachment"), async (req, res) => {
+app.post("/send-emails", requireAuth, upload.single("attachment"), async (req, res) => {
   try {
     const {
       subject,
@@ -273,9 +291,18 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
       campaignId,
     } = req.body;
 
-    const sender = process.env.SENDER_EMAIL;
-    if (!sender) {
-      return res.status(500).json({ success: false, error: "SENDER_EMAIL environment variable is not configured" });
+    // Load user's sender profile
+    const { data: profile, error: dbError } = await supabaseAdmin
+      .from("sender_profiles")
+      .select("*")
+      .eq("user_id", req.userId)
+      .single();
+
+    if (dbError && dbError.code !== "PGRST116") {
+      throw dbError;
+    }
+    if (!profile) {
+      return res.status(400).json({ success: false, error: "Please configure your sender profile in Settings first." });
     }
 
     const delayMs = parseInt(req.body.delay) || 2000;
@@ -297,6 +324,7 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
         recentActivity: [],
         results: [],
       };
+      console.log("[Backend] status before send:", activeCampaigns[campaignId]);
     }
 
     // Read attachment once before the loop (avoids re-reading per recipient)
@@ -305,6 +333,14 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
     if (req.file) {
       attachmentContent = fs.readFileSync(req.file.path).toString("base64");
       attachmentFilename = req.file.originalname;
+    }
+
+    const attachments = [];
+    if (attachmentContent) {
+      attachments.push({
+        filename: attachmentFilename,
+        content: attachmentContent,
+      });
     }
 
     let sent = 0;
@@ -331,52 +367,37 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
 
       let generatedHtml = generatedBody.replace(/\n/g, "<br>");
 
-      const mailOptions = {
-        from: sender,
-        to: contact.email,
-        subject: generatedSubject,
-        text: generatedBody,
-        html: generatedHtml,
-      };
-
-      if (attachmentContent) {
-        mailOptions.attachments = [{
-          filename: attachmentFilename,
-          content: attachmentContent,
-        }];
-      }
-
       try {
-        const { data, error } = await resend.emails.send(mailOptions);
+        const result = await sendEmail({
+          provider: profile.provider,
+          credentials: {
+            sender_email: profile.sender_email,
+            smtp_host: profile.smtp_host,
+            smtp_port: profile.smtp_port,
+            smtp_username: profile.smtp_username,
+            smtp_password: profile.smtp_password,
+            resend_api_key: profile.resend_api_key,
+          },
+          to: contact.email,
+          subject: generatedSubject,
+          html: generatedHtml,
+          attachments,
+        });
 
-        if (error) {
-          console.error("Resend error for", contact.email, error);
-          const resObj = { email: contact.email, status: "Failed", error: error.message || "Resend API Error" };
-          results.push(resObj);
-          if (campaignId && activeCampaigns[campaignId]) {
-            activeCampaigns[campaignId].failed = (activeCampaigns[campaignId].failed || 0) + 1;
-            activeCampaigns[campaignId].results.push(resObj);
-            activeCampaigns[campaignId].recentActivity.unshift({ email: contact.email, status: "Failed" });
-            if (activeCampaigns[campaignId].recentActivity.length > 1000) {
-              activeCampaigns[campaignId].recentActivity.pop();
-            }
-          }
-        } else {
-          console.log("Sent via Resend to", contact.email, data);
-          sent++;
-          const resObj = { email: contact.email, status: "Sent", error: "" };
-          results.push(resObj);
-          if (campaignId && activeCampaigns[campaignId]) {
-            activeCampaigns[campaignId].sent = sent;
-            activeCampaigns[campaignId].results.push(resObj);
-            activeCampaigns[campaignId].recentActivity.unshift({ email: contact.email, status: "Sent" });
-            if (activeCampaigns[campaignId].recentActivity.length > 1000) {
-              activeCampaigns[campaignId].recentActivity.pop();
-            }
+        console.log(`Sent via ${profile.provider} to`, contact.email, result);
+        sent++;
+        const resObj = { email: contact.email, status: "Sent", error: "" };
+        results.push(resObj);
+        if (campaignId && activeCampaigns[campaignId]) {
+          activeCampaigns[campaignId].sent = sent;
+          activeCampaigns[campaignId].results.push(resObj);
+          activeCampaigns[campaignId].recentActivity.unshift({ email: contact.email, status: "Sent" });
+          if (activeCampaigns[campaignId].recentActivity.length > 1000) {
+            activeCampaigns[campaignId].recentActivity.pop();
           }
         }
       } catch (err) {
-        console.error("Failed to send to", contact.email, err);
+        console.error(`Failed to send via ${profile.provider} to`, contact.email, err);
         const resObj = { email: contact.email, status: "Failed", error: err.message || "Connection Error" };
         results.push(resObj);
         if (campaignId && activeCampaigns[campaignId]) {
@@ -387,6 +408,10 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
             activeCampaigns[campaignId].recentActivity.pop();
           }
         }
+      }
+
+      if (campaignId && activeCampaigns[campaignId]) {
+        console.log("[Backend] status after send:", activeCampaigns[campaignId]);
       }
 
       await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -406,6 +431,8 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
       }, 3600000); // 1 hour
     }
 
+    console.log("[Backend] status before response:", activeCampaigns[campaignId]);
+
     res.json({
       success: true,
       sent,
@@ -420,6 +447,189 @@ app.post("/send-emails", upload.single("attachment"), async (req, res) => {
     if (req.file?.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
     }
+  }
+});
+
+// ── Auth middleware: verifies Supabase JWT, attaches req.userId ──
+async function requireAuth(req, res, next) {
+  const authHeader = req.headers["authorization"] || "";
+  const token = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : null;
+  if (!token) {
+    return res.status(401).json({ error: "Missing auth token" });
+  }
+  const { data: { user }, error } = await supabaseAdmin.auth.getUser(token);
+  if (error || !user) {
+    return res.status(401).json({ error: "Invalid or expired token" });
+  }
+  req.userId = user.id;
+  req.userEmail = user.email;
+  next();
+}
+
+// ── POST /sync-user: Upserts user into public.users bypassing RLS ──
+app.post("/sync-user", requireAuth, async (req, res) => {
+  try {
+    const { email } = req.body;
+    const targetEmail = email || req.userEmail;
+
+    if (!targetEmail) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from("users")
+      .upsert(
+        { id: req.userId, email: targetEmail },
+        { onConflict: "id" }
+      )
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json({ success: true, user: data });
+  } catch (err) {
+    console.error("POST /sync-user error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
+// ── GET /sender-profile ──
+app.get("/sender-profile", requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("sender_profiles")
+      .select("*")
+      .eq("user_id", req.userId)
+      .single();
+
+    if (error && error.code !== "PGRST116") { // PGRST116 = no rows
+      throw error;
+    }
+    res.json({ profile: data || null });
+  } catch (err) {
+    console.error("GET /sender-profile error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /sender-profile ──
+app.post("/sender-profile", requireAuth, async (req, res) => {
+  try {
+    const {
+      provider,
+      sender_email,
+      smtp_host,
+      smtp_port,
+      smtp_username,
+      smtp_password,
+      resend_api_key,
+    } = req.body;
+
+    // Validate required fields
+    if (!provider || !sender_email) {
+      return res.status(400).json({ error: "provider and sender_email are required" });
+    }
+    if (provider === "smtp") {
+      if (!smtp_host || !smtp_port || !smtp_username || !smtp_password) {
+        return res.status(400).json({ error: "SMTP host, port, username, and password are required" });
+      }
+    }
+    if (provider === "resend" && !resend_api_key) {
+      return res.status(400).json({ error: "Resend API key is required" });
+    }
+
+    const payload = {
+      user_id:       req.userId,
+      provider,
+      sender_email,
+      smtp_host:     smtp_host     || null,
+      smtp_port:     smtp_port     ? Number(smtp_port) : null,
+      smtp_username: smtp_username || null,
+      smtp_password: smtp_password || null,
+      resend_api_key: resend_api_key || null,
+    };
+
+    // Check if profile exists
+    const { data: existing, error: findError } = await supabaseAdmin
+      .from("sender_profiles")
+      .select("id")
+      .eq("user_id", req.userId)
+      .single();
+
+    if (findError && findError.code !== "PGRST116") {
+      throw findError;
+    }
+
+    let result;
+    if (existing) {
+      const { data, error } = await supabaseAdmin
+        .from("sender_profiles")
+        .update(payload)
+        .eq("user_id", req.userId)
+        .select()
+        .single();
+      if (error) throw error;
+      result = data;
+    } else {
+      const { data, error } = await supabaseAdmin
+        .from("sender_profiles")
+        .insert(payload)
+        .select()
+        .single();
+      if (error) throw error;
+      result = data;
+    }
+
+    res.json({ success: true, profile: result });
+  } catch (err) {
+    console.error("POST /sender-profile error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /test-connection ──
+app.post("/test-connection", requireAuth, async (req, res) => {
+  try {
+    const {
+      provider,
+      sender_email,
+      smtp_host,
+      smtp_port,
+      smtp_username,
+      smtp_password,
+      resend_api_key,
+    } = req.body;
+
+    if (provider === "smtp") {
+      // ─ SMTP verify ─
+      const transporter = nodemailer.createTransport({
+        host: smtp_host,
+        port: Number(smtp_port),
+        secure: Number(smtp_port) === 465,
+        auth: { user: smtp_username, pass: smtp_password },
+      });
+      await transporter.verify();
+      return res.json({ success: true, message: "SMTP connection verified successfully" });
+    }
+
+    if (provider === "resend") {
+      // ─ Resend verify: send a real test email ─
+      const testClient = new Resend(resend_api_key);
+      const { error } = await testClient.emails.send({
+        from: sender_email,
+        to:   sender_email,
+        subject: "Thanda Mail — Connection Test",
+        text: "Your Resend API key is working correctly. You can now use Thanda Mail to send campaigns.",
+      });
+      if (error) throw new Error(error.message);
+      return res.json({ success: true, message: "Resend connection verified — test email sent to " + sender_email });
+    }
+
+    return res.status(400).json({ error: "Unknown provider. Use \"smtp\" or \"resend\"." });
+  } catch (err) {
+    console.error("POST /test-connection error:", err.message);
+    res.json({ success: false, error: err.message });
   }
 });
 
